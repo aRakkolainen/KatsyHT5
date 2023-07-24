@@ -1,2 +1,2 @@
-# KatsyHT5
+# Katsy_HT5
 Lähdekoodi Käyttöjärjestelmät ja Systeemiohjelmointikurssin harjoitustyöprojektille 5.
