@@ -1,2 +1,2 @@
 # KatsyHT5
-Käyttöjärjestelmät ja systeemiohjelmointi harjoitustyö 5
+Käyttöjärjestelmät ja systeemiohjelmointi harjoitustyöprojekti 5
