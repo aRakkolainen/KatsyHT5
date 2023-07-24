@@ -1,25 +1,33 @@
-//Project 5: Parallel Zip
+/*Project 5: Parallel Zip
 // Expanding the my-zip and my-unzip from project 2 Unix utilities. 
 //Sources: Using locks with multiple threads: https://www.geeksforgeeks.org/mutex-lock-for-linux-thread-synchronization/ 
 // Using threads: https://pages.cs.wisc.edu/~remzi/OSTEP/threads-api.pdf
+// Creating multiple threads: https://www.geeksforgeeks.org/multithreading-in-c/ 
+//Using locks is based on these chapters from course book: 
+Chapter 28: https://pages.cs.wisc.edu/~remzi/OSTEP/threads-locks.pdf
+Chapter 29: https://pages.cs.wisc.edu/~remzi/OSTEP/threads-locks-usage.pdf
+*/
 #include <stdio.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/sysinfo.h>
 #include <unistd.h>
-
-pthread_mutex_t lock;
+//Used for locking operations and are based on https://pages.cs.wisc.edu/~remzi/OSTEP/threads-api.pdf: 
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t lock2 = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t condition = PTHREAD_COND_INITIALIZER; 
+// This structure is also based on this: https://pages.cs.wisc.edu/~remzi/OSTEP/threads-api.pdf: 
 typedef struct {
     char *line; 
     int length; 
 } myarg_t;
 
-// countChar function is based on this website: https://javatutoring.com/c-program-to-count-occurrences-of-character-in-string/
+
 int countChar(char, char *);
 void *readFile(void *);
 void *writeToStdout(void *); 
-
+// countChar function is based on this website: https://javatutoring.com/c-program-to-count-occurrences-of-character-in-string/
 
 int countChar(char character, char *str) {
     int count = 0; 
@@ -33,10 +41,8 @@ int countChar(char character, char *str) {
 }
 
 
-
 //This function reads the file to be compressed and then calls function where the content is compressed
 void *readFile(void *arg) {
-    //char *inputFileName =  (char *) arg; 
     pthread_t p;
     myarg_t args;
     FILE * file; 
@@ -51,22 +57,24 @@ void *readFile(void *arg) {
             do {
                     r= getline(&line, &len, file); 
                     if (r != -1) {
-                        //Starting new thread for writing to stdout
-                        //pthread_mutex_lock(&lock);
-
+                        //Starting new thread for writing to stdout (this can be thought as child thread of the read file thread)
                         if ((args.line = malloc((strlen(line)+1)*sizeof(char))) == NULL) {
                             fprintf(stderr, "malloc failed");
+                            pthread_mutex_unlock(&lock);
                             exit(1);
                         }
+                        //Locking the creation of thread for writing in the stdout.
+                        // Locking is based on this: https://www.geeksforgeeks.org/mutex-lock-for-linux-thread-synchronization/  and chapter 28 and 29 from coursebook:
+                        // Chapter 28: https://pages.cs.wisc.edu/~remzi/OSTEP/threads-locks.pdf
+                        //Chapter 29: https://pages.cs.wisc.edu/~remzi/OSTEP/threads-locks-usage.pdf
+                        pthread_mutex_lock(&lock);
                         strcpy(args.line, line); 
                         args.length = r; 
-                        pthread_create(&p, NULL, writeToStdout, &args); 
-                        //pthread_mutex_unlock(&lock);
+                        pthread_create(&p,NULL, writeToStdout, &args);
                         pthread_join(p, NULL);
+                        pthread_mutex_unlock(&lock);
                     }
                     }while(r > 1);
-                    //pthread_join(p, NULL);
-        
                     free(line);
                     fclose(file);
         }
@@ -78,7 +86,6 @@ void *readFile(void *arg) {
 // for counting the number of each character in line. 
 void *writeToStdout(void *arg) { 
     myarg_t *args = (myarg_t *) arg;  
-    //printf("%s", args.line);
     char *line = args->line;
     int r = args->length; 
     int counter=0; 
@@ -87,53 +94,49 @@ void *writeToStdout(void *arg) {
     while (total < r) {
         total += counter; 
         character = line[total];
-        if (character == '\0') {
+        if (character == '\0' || total > r) {  
             break; 
         }
-        pthread_mutex_lock(&lock);
         counter = countChar(character, line);
         //Writing the integer in binary form and writing char simultaneously: https://stackoverflow.com/questions/10810593/two-consecutive-fwrites-operation  
         //Info about using fwrite(): https://lutpub.lut.fi/bitstream/handle/10024/162908/Nikula2021-COhjelmointiopasV21.pdf?sequence=1&isAllowed=y
         fwrite(&counter, sizeof(int), 1, stdout); 
-        fwrite(&character, sizeof(char), 1, stdout);  
-        pthread_mutex_unlock(&lock);          
+        fwrite(&character, sizeof(char), 1, stdout);       
     }
     return NULL;
 }
 
 int main(int argc, char *argv[]) {
-    //char *inputFileName;
-    //int i=1; 
-    //int total = argc; 
-    //pthread_t thread[argc-1];
     //Multiple threads are based on this website: https://www.geeksforgeeks.org/multithreading-in-c/ 
     pthread_t tid; 
 
-    
     if (argc == 1) {
         fprintf(stderr, "pzip: file1 [file2 ...]\n");
         exit(1);
     } else if (argc >= 2) {
-        //Creating one thread for each input file  is based on this: https://www.geeksforgeeks.org/mutex-lock-for-linux-thread-synchronization/  
+        //Creating one thread for each input file  is based on this: https://www.geeksforgeeks.org/multithreading-in-c/ 
         // and this:  https://pages.cs.wisc.edu/~remzi/OSTEP/threads-api.pdf      
-        /*while (i < total && i < get_nprocs()) {    
-            pthread_create(&(thread[i-1]), NULL, &readFile, argv[i]);
-            i++;    
-        }
-        for (int i=1; i < argc-1; i++) {
-            pthread_join(thread[i], NULL);
-        }*/
-        //Creating one thread for each input file
-        for (int i=0; i < argc-1 && i <= get_nprocs_conf(); i++) {
-            pthread_create(&tid, NULL, readFile, argv[i+1]);
-            if (i > get_nprocs_conf()) {
-                pthread_join(tid, NULL); 
+       
+        //Creating one thread for each input file with exception that there is run only threads as many as CPUs at a time. 
+        if (argc-1 <= get_nprocs_conf()) {
+            for (int i=0; i < argc-1 && i <= get_nprocs_conf(); i++) {
                 pthread_create(&tid, NULL, readFile, argv[i+1]);
+                if (i > get_nprocs()) {
+                    break; 
+                }
             }
+            pthread_exit(NULL);
+        } else {
+            for (int i=0; i < argc-1; i++) {
+                pthread_create(&tid, NULL, readFile, argv[i+1]);
+                if (i > get_nprocs_conf()) {
+                    //waiting for last thread to be done before continuing
+                    pthread_join(tid, NULL);
+                    continue; 
+                }
+            }
+            pthread_exit(NULL);
         }
-        pthread_exit(NULL);
-        // So this almost works in parallel, except the order for handling the files is different every time... So the locking system doesn't work?
-        // Miten sen nyt sais toimimaa siten, et se kirjoittaa yhden tiedoston sisällön kerrallaan ennen kuin seuraavan... 
     }
         return(0); 
     }
