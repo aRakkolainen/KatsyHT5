@@ -4,7 +4,7 @@
 #include <string.h>
 #include <sys/sysinfo.h>
 #include <unistd.h>
-
+//void *arg is the name of the input file to be read with fread
 void *printContent(void *arg) {
     FILE *file; 
     int number;
@@ -38,11 +38,12 @@ int main(int argc, char * argv[]) {
                 pthread_create(&tid, NULL, printContent, argv[i+1]);
             }
         pthread_exit(NULL);
-        } else {
+        } else {// If there are more input files than current system has CPUs, there is created threads as many as the CPUs and then is waited that 
+        // the last one of those is done before is created the rest of needed threads. 
             for (int i=0; i < argc-1; i++) {
                 pthread_create(&tid, NULL, printContent, argv[i+1]);
                 if (i > get_nprocs_conf()) {
-                    pthread_join(tid, NULL);
+                    pthread_join(tid, NULL); //here is waited until the last thread is done before continuing with the loop
                     continue; 
                 }
             }

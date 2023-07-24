@@ -17,7 +17,8 @@ Chapter 29: https://pages.cs.wisc.edu/~remzi/OSTEP/threads-locks-usage.pdf
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t lock2 = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t condition = PTHREAD_COND_INITIALIZER; 
-// This structure is also based on this: https://pages.cs.wisc.edu/~remzi/OSTEP/threads-api.pdf: 
+// This structure is also based on this: https://pages.cs.wisc.edu/~remzi/OSTEP/threads-api.pdf: and it's used for transfering line and length of line 
+// to writeStdout function when using thread for that
 typedef struct {
     char *line; 
     int length; 
@@ -72,6 +73,7 @@ void *readFile(void *arg) {
                         args.length = r; 
                         pthread_create(&p,NULL, writeToStdout, &args);
                         pthread_join(p, NULL);
+                        //when the thread to execute the writing to stdout is done, the lock is released
                         pthread_mutex_unlock(&lock);
                     }
                     }while(r > 1);
@@ -126,7 +128,8 @@ int main(int argc, char *argv[]) {
                 }
             }
             pthread_exit(NULL);
-        } else {
+        } else { // If there are more input files than current system has CPUs, there is created threads as many as the CPUs and then is waited that 
+        // the last one of those is done before is created the rest of needed threads. 
             for (int i=0; i < argc-1; i++) {
                 pthread_create(&tid, NULL, readFile, argv[i+1]);
                 if (i > get_nprocs_conf()) {
